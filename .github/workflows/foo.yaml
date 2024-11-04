@@ -1,0 +1,34 @@
+---
+name: PR Kicked
+
+on:
+    pull_request:
+        types: [dequeued]
+
+permissions:
+    pull-requests: write
+
+jobs:
+    JOBBYJOB:
+        if: github.event.reason != 'MANUAL' && github.event.reason != 'MERGE'
+        runs-on: ubuntu-latest
+        env:
+            GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        steps:
+            - name: Comment on PR
+              run: |
+                  gh pr comment --body-file - ${{ github.event.pull_request.html_url }} <<EOF
+                  I'm a comment
+                  EOF
+
+            # NB: Order here is important! We MUST merge master in, THEN enable auto-merge.
+            #   1. We don't want auto-merge to race and re-enqueue
+            #   2. We track flakiness by looking at the commit SHA when auto-merge was enabled.
+
+            # @TODO: `gh pr update-branch` has a --rebase flag. Should we use it?
+            - name: Merge master into PR branch
+              run: gh pr update-branch ${{ github.event.pull_request.html_url }}
+
+            - name: Enable auto-merge
+              # NB: "If required checks have not yet passed, auto-merge will be enabled."
+              run: gh pr merge ${{ github.event.pull_request.html_url }}
